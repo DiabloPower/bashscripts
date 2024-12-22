@@ -33,6 +33,12 @@ chmod +x install-all
 - GitHub Repository: [nautilus-scripts](https://github.com/cfgnunes/nautilus-scripts.git)
 - Local ZIP File: `nautilus-scripts-main.zip` (if present)
 
+## Compatibility
+These scripts were developed on Zorin OS 17.2 but should run on all Debian-based systems. Tested on:
+
+- Zorin OS 17.2
+- Debian Bookworm (ARM)
+
 ## Usage
 ### Graphical File Managers
 The scripts can be accessed via the context menu in Nautilus, Caja, or Nemo.
