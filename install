@@ -1,0 +1,230 @@
+#!/bin/bash
+# 
+# Copyright (c) 2024 Ronny Hamann
+# 
+# License Terms:
+# 
+# 1. Modifications of this script are permitted for personal use.
+# 2. Redistribution or reuse of the modified or unmodified script
+#    is only allowed with prior written permission from the author.
+# 
+# Disclaimer of Warranty:
+# 
+# This script is provided "as is", without warranty of any kind, express or implied,
+# including but not limited to the warranties of merchantability, fitness for a particular purpose,
+# and noninfringement. In no event shall the author be liable for any claim, damages or other liability,
+# whether in an action of contract, tort or otherwise, arising from, out of or in connection with the
+# script or the use or other dealings in the script.
+#
+
+HELPERS_DIR="/usr/local/bin/helpers"
+shortcut="F8 direct-delete"
+accels_file="$HOME/.config/nautilus/scripts-accels"
+
+# Function to check if a command is installed
+check_command() {
+  if ! which "$1" > /dev/null 2>&1; then
+    echo "$1 not found. Installing $1..."
+    sudo apt-get update
+    sudo apt-get install -y "$1"
+  else
+    echo "$1 is already installed."
+  fi
+}
+
+# Function to check if a file manager is installed
+is_installed() {
+  if which "$1" > /dev/null 2>&1; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+# Function to install scripts in the Nautilus script directory
+install_scripts_nautilus() {
+  echo "Installing scripts in the Nautilus script directory..."
+  check_command sshpass
+  # Check and create the scripts directory if it doesn't exist
+  if [ ! -d "$HOME/.local/share/nautilus/scripts" ]; then
+    mkdir -p "$HOME/.local/share/nautilus/scripts"
+    echo "Created Nautilus scripts directory."
+  else
+    echo "Nautilus scripts directory already exists."
+  fi
+  # Copy and make the scripts executable
+  cp scripts/compare-bin_iso "$HOME/.local/share/nautilus/scripts"
+  chmod +x "$HOME/.local/share/nautilus/scripts/compare-bin_iso"
+  chmod +x "$HOME/.local/share/nautilus/scripts/direct-delete"
+  chmod +x "$HOME/.local/share/nautilus/scripts/Make-Desktop-File"
+  chmod +x "$HOME/.local/share/nautilus/scripts/rsync-copy"
+  chmod +x "$HOME/.local/share/nautilus/scripts/rsync-ssh-copy"
+  # Append the shortcut to the nautilus scripts accels file if it doesn't already exist
+  if ! grep -Fxq "$shortcut" "$accels_file"; then
+    echo "$shortcut" >> "$accels_file"
+    echo "Shortcut added to $accels_file."
+  else
+    echo "Shortcut already exists in $accels_file."
+  fi
+  echo "Scripts installed successfully in the Nautilus script directory."
+}
+
+# Function to install scripts in the Caja script directory
+install_scripts_caja() {
+  echo "Installing scripts in the Caja script directory..."
+  check_command sshpass
+  # Check and create the scripts directory if it doesn't exist
+  if [ ! -d "$HOME/.config/caja/scripts" ]; then
+    mkdir -p "$HOME/.config/caja/scripts"
+    echo "Created Caja scripts directory."
+  else
+    echo "Caja scripts directory already exists."
+  fi
+  # Copy and make the scripts executable
+  cp scripts/compare-bin_iso "$HOME/.config/caja/scripts"
+  chmod +x "$HOME/.config/caja/scripts/compare-bin_iso"
+  chmod +x "$HOME/.config/caja/scripts/direct-delete"
+  chmod +x "$HOME/.config/caja/scripts/Make-Desktop-File"
+  chmod +x "$HOME/.config/caja/scripts/rsync-copy"
+  chmod +x "$HOME/.config/caja/scripts/rsync-ssh-copy"
+  echo "Scripts installed successfully in the Caja script directory."
+}
+
+# Function to install scripts in the Nemo script directory
+install_scripts_nemo() {
+  echo "Installing scripts in the Nemo script directory..."
+  check_command sshpass
+  # Check and create the scripts directory if it doesn't exist
+  if [ ! -d "$HOME/.local/share/nemo/scripts" ]; then
+    mkdir -p "$HOME/.local/share/nemo/scripts"
+    echo "Created Nemo scripts directory."
+  else
+    echo "Nemo scripts directory already exists."
+  fi
+  # Copy and make the scripts executable
+  cp scripts/compare-bin_iso "$HOME/.local/share/nemo/scripts"
+  chmod +x "$HOME/.local/share/nemo/scripts/compare-bin_iso"
+  chmod +x "$HOME/.local/share/nemo/scripts/direct-delete"
+  chmod +x "$HOME/.local/share/nemo/scripts/Make-Desktop-File"
+  chmod +x "$HOME/.local/share/nemo/scripts/rsync-copy"
+  chmod +x "$HOME/.local/share/nemo/scripts/rsync-ssh-copy"
+  echo "Scripts installed successfully in the Nemo script directory."
+}
+
+# Function to install scripts in /usr/bin
+install_scripts_usr_bin() {
+  echo "Installing scripts in /usr/bin..."
+  check_command sshpass
+  sudo cp scripts/compare-bin_iso /usr/bin/
+  sudo chmod +x /usr/bin/compare-bin_iso
+  sudo chmod +x /usr/bin/direct-delete
+  sudo chmod +x /usr/bin/Make-Desktop-File
+  sudo chmod +x /usr/bin/rsync-copy
+  sudo chmod +x /usr/bin/rsync-ssh-copy
+  echo "Scripts installed successfully in /usr/bin."
+}
+
+# Function to install helper scripts
+install_helper_scripts() {
+  echo "Installing helper scripts..."
+  sudo mkdir -p "$HELPERS_DIR"
+  sudo cp scripts/compare-bin_iso-helper "$HELPERS_DIR"
+  sudo chmod +x "$HELPERS_DIR/compare-bin_iso-helper"
+  echo "Helper scripts installed successfully."
+}
+
+# Function to install additional dependencies
+install_additional_dependencies() {
+  echo "Installing additional dependencies..."
+  check_command bchunk
+  check_command expect
+  echo "Additional dependencies installed successfully."
+}
+
+# Main script
+if [ -n "$DISPLAY" ] || [ -n "$WAYLAND_DISPLAY" ]; then
+  check_command zenity
+
+  # Check which file managers are installed
+  nautilus_installed=$(is_installed nautilus && echo "Nautilus" || echo "")
+  caja_installed=$(is_installed caja && echo "Caja" || echo "")
+  nemo_installed=$(is_installed nemo && echo "Nemo" || echo "")
+
+  # Filter out empty strings
+  installed_file_managers=$(echo "$nautilus_installed $thunar_installed $dolphin_installed $pcmanfm_installed $caja_installed $nemo_installed" | xargs)
+
+  # Create the options list for Zenity 
+  zenity_options=() 
+  [[ -n "$nautilus_installed" ]] && zenity_options+=("1. Install scripts for Nautilus") 
+  [[ -n "$caja_installed" ]] && zenity_options+=("1. Install scripts for Caja") 
+  [[ -n "$nemo_installed" ]] && zenity_options+=("1. Install scripts for Nemo") 
+  zenity_options+=("2. Install scripts only (/usr/bin)") 
+  zenity_options+=("3. Install all")
+
+  choice=$(zenity --list --title="Installation Options" --column="Option" --width=400 --height=300 "${zenity_options[@]}")
+
+  if [ $? -ne 0 ]; then
+    zenity --info --text="Installation cancelled."
+    exit 1
+  fi
+
+  case $choice in 
+    "1. Install scripts for Nautilus") 
+      is_installed nautilus && install_scripts_nautilus
+      ;; 
+    "1. Install scripts for Caja") 
+      is_installed caja && install_scripts_caja
+      ;;
+    "1. Install scripts for Nemo") 
+      is_installed nemo && install_scripts_nemo
+      ;;
+    "2. Install scripts only (/usr/bin)")
+      install_scripts_usr_bin
+      ;;
+    "3. Install all")
+      is_installed nautilus && install_scripts_nautilus
+      is_installed caja && install_scripts_caja
+      is_installed nemo && install_scripts_nemo
+      install_scripts_usr_bin
+      ;;
+    *)
+      zenity --info --text="Installation cancelled."
+      exit 1
+      ;;
+  esac
+
+  install_helper_scripts
+  install_additional_dependencies
+  zenity --info --text="Installation completed successfully."
+else
+  echo "Select installation option:"
+  echo "1. Install scripts for installed file managers"
+  echo "2. Install scripts only (/usr/bin)"
+  echo "3. Install all"
+
+  read -p "Enter your choice (1, 2, or 3): " choice
+
+  case $choice in
+    1)
+      is_installed nautilus && install_scripts_nautilus
+      is_installed caja && install_scripts_caja
+      is_installed nemo && install_scripts_nemo
+      ;;
+    2)
+      install_scripts_usr_bin
+      ;;
+    3)
+      is_installed nautilus && install_scripts_nautilus
+      is_installed caja && install_scripts_caja
+      is_installed nemo && install_scripts_nemo
+      install_scripts_usr_bin
+      ;;
+    *)
+      echo "Installation cancelled."
+      exit 1
+      ;;
+  esac
+
+  install_additional_dependencies
+  echo "Installation completed successfully."
+fi

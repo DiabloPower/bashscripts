@@ -1,0 +1,120 @@
+#!/bin/bash
+# 
+# Copyright (c) 2024 Ronny Hamann
+# 
+# License Terms:
+# 
+# 1. Modifications of this script are permitted for personal use.
+# 2. Redistribution or reuse of the modified or unmodified script
+#    is only allowed with prior written permission from the author.
+# 
+# Disclaimer of Warranty:
+# 
+# This script is provided "as is", without warranty of any kind, express or implied,
+# including but not limited to the warranties of merchantability, fitness for a particular purpose,
+# and noninfringement. In no event shall the author be liable for any claim, damages or other liability,
+# whether in an action of contract, tort or otherwise, arising from, out of or in connection with the
+# script or the use or other dealings in the script.
+#
+
+file="nautilus-scripts-main.zip"
+repo_url="https://github.com/cfgnunes/nautilus-scripts.git"
+
+# Function to check if a command is installed
+check_command() {
+  if ! which "$1" > /dev/null 2>&1; then
+    echo "$1 not found. Installing $1..."
+    sudo apt-get update
+    sudo apt-get install -y "$1"
+  else
+    echo "$1 is already installed."
+  fi
+}
+
+# Function to install nautilus-scripts-main from the cloned repository
+install_nautilus_scripts_from_git() {
+  echo "Cloning the nautilus-scripts repository..."
+  check_command git
+  git clone "$repo_url" /tmp/nautilus-scripts-main
+  chmod +x /tmp/nautilus-scripts-main/install.sh
+  /tmp/nautilus-scripts-main/install.sh
+  rm -rf /tmp/nautilus-scripts-main
+  echo "nautilus-scripts-main installed successfully from GitHub."
+}
+
+# Function to install nautilus-scripts-main.zip
+install_nautilus_scripts_from_zip() {
+  echo "Installing nautilus-scripts-main.zip..."
+  check_command unzip
+  unzip "$file" -d /tmp
+  chmod +x /tmp/nautilus-scripts-main/install.sh
+  /tmp/nautilus-scripts-main/install.sh
+  rm -rf /tmp/nautilus-scripts-main
+  echo "nautilus-scripts-main.zip installed successfully."
+}
+
+# Main script
+if [ -n "$DISPLAY" ] || [ -n "$WAYLAND_DISPLAY" ]; then
+  # Graphical environment using Zenity
+  check_command zenity
+  
+  choice=$(zenity --list --title="Installation Options" --column="Option" --width=400 --height=300 \
+    "1. Install nautilus-scripts-main.zip only" \
+    "2. Install other scripts (user's local directory)" \
+    "3. Install both")
+
+  if [ $? -ne 0 ]; then
+    zenity --info --text="Installation cancelled."
+    exit 1
+  fi
+
+  case $choice in
+    "1. Install nautilus-scripts-main.zip only")
+      install_nautilus_scripts_from_git || install_nautilus_scripts_from_zip
+      ;;
+    "2. Install other scripts (user's local directory)")
+      chmod +x ./install
+      ./install
+      ;;
+    "3. Install both")
+      install_nautilus_scripts_from_git || install_nautilus_scripts_from_zip
+      chmod +x ./install
+      ./install
+      ;;
+    *)
+      zenity --info --text="Installation cancelled."
+      exit 1
+      ;;
+  esac
+
+  zenity --info --text="Installation completed successfully."
+else
+  # Non-graphical environment using Shell
+  echo "Select installation option:"
+  echo "1. Install nautilus-scripts-main.zip only"
+  echo "2. Install other scripts (user's local directory)"
+  echo "3. Install both"
+
+  read -p "Enter your choice (1, 2, or 3): " choice
+
+  case $choice in
+    1)
+      install_nautilus_scripts_from_git || install_nautilus_scripts_from_zip
+      ;;
+    2)
+      chmod +x ./install
+      ./install
+      ;;
+    3)
+      install_nautilus_scripts_from_git || install_nautilus_scripts_from_zip
+      chmod +x ./install
+      ./install
+      ;;
+    *)
+      echo "Installation cancelled."
+      exit 1
+      ;;
+  esac
+
+  echo "Installation completed successfully."
+fi
