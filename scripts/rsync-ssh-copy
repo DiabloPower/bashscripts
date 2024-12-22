@@ -1,0 +1,137 @@
+#!/bin/bash
+# 
+# Copyright (c) [2024] [Ronny Hamann]
+# 
+# License Terms:
+# 
+# 1. Modifications of this script are permitted for personal use.
+# 2. Redistribution or reuse of the modified or unmodified script
+#    is only allowed with prior written permission from the author.
+# 
+# Disclaimer of Warranty:
+# 
+# This script is provided "as is", without warranty of any kind, express or implied,
+# including but not limited to the warranties of merchantability, fitness for a particular purpose,
+# and noninfringement. In no event shall the author be liable for any claim, damages or other liability,
+# whether in an action of contract, tort or otherwise, arising from, out of or in connection with the
+# script or the use or other dealings in the script.
+#
+
+# Check if source files/folders are provided
+if [ $# -eq 0 ]; then
+  if [ -n "$DISPLAY" ] || [ -n "$WAYLAND_DISPLAY" ]; then
+    zenity --error --text="No source file or folder specified!"
+  else
+    echo "No source file or folder specified!"
+  fi
+  exit 1
+fi
+
+# Function to clean up and exit
+cleanup_exit() {
+  if [ -n "$1" ];then
+    rm -f "$1"
+  fi
+  exit $2
+}
+
+# Check if we are in an X11/Wayland environment
+if [ -n "$DISPLAY" ] || [ -n "$WAYLAND_DISPLAY" ];then
+  # Graphical environment
+  FORM_OUTPUT=$(zenity --forms --title="File Transfer" \
+    --text="Please enter the necessary information:" \
+    --separator="," \
+    --add-entry="Destination Path" \
+    --add-entry="SSH Username" \
+    --add-entry="SSH Host" \
+    --add-password="SSH Password")
+
+  # Check if the form was cancelled
+  if [ $? -ne 0 ]; then
+    cleanup_exit "" 1
+  fi
+
+  # Parse the form output
+  DEST=$(echo $FORM_OUTPUT | cut -d',' -f1)
+  SSH_USER=$(echo $FORM_OUTPUT | cut -d',' -f2)
+  SSH_HOST=$(echo $FORM_OUTPUT | cut -d',' -f3)
+  SSH_PASS=$(echo $FORM_OUTPUT | cut -d',' -f4)
+
+  # Ensure all fields are filled
+  if [ -z "$DEST" ] || [ -z "$SSH_USER" ] || [ -z "$SSH_HOST" ]; then
+    zenity --error --text="All fields are required!"
+    cleanup_exit "" 1
+  fi
+
+  # Create a temporary file to store progress
+  PROGRESS_FILE=$(mktemp)
+
+  # Add SSH host to known_hosts if not already known
+  ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2> /dev/null
+
+  # Start rsync in the background and output progress to the temporary file
+  sshpass -p "$SSH_PASS" rsync -ahu --info=progress2 -e "ssh -o StrictHostKeyChecking=accept-new" "$@" "$SSH_USER@$SSH_HOST:$DEST" > "$PROGRESS_FILE" &
+
+  # Use Zenity to display the progress
+  (
+    while kill -0 $! 2>/dev/null; do
+      if [ -s "$PROGRESS_FILE" ]; then
+        PROGRESS=$(tail -n 1 "$PROGRESS_FILE" | grep -oP '(\d+)%' | tail -n 1 | tr -d '%')
+        echo "$PROGRESS"
+        echo "# $PROGRESS% completed"
+      fi
+      sleep 1
+    done
+  ) | zenity --progress --title="File Transfer" --percentage=0 --auto-close --width=500
+
+  # Check rsync result
+  wait $!
+
+  # Notify completion
+  if [ $? -eq 0 ]; then
+    zenity --info --text="Transfer completed successfully!"
+  else
+    zenity --error --text="Transfer failed!"
+  fi
+
+  cleanup_exit "$PROGRESS_FILE" $?
+
+else
+  # Non-graphical environment
+  echo "Please enter the necessary information:"
+
+  read -p "Destination Path: " DEST
+  read -p "SSH Username: " SSH_USER
+  read -p "SSH Host: " SSH_HOST
+  read -sp "SSH Password: " SSH_PASS
+  echo
+
+  # Ensure all fields are filled
+  if [ -z "$DEST" ] || [ -z "$SSH_USER" ] || [ -z "$SSH_HOST" ]; then
+    echo "All fields are required!"
+    exit 1
+  fi
+
+  # Add SSH host to known_hosts if not already known
+  ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2> /dev/null
+
+  # Start rsync and show progress in the terminal
+  sshpass -p "$SSH_PASS" rsync -ahu --info=progress2 -e "ssh -o StrictHostKeyChecking=accept-new" "$@" "$SSH_USER@$SSH_HOST:$DEST" &
+  
+  PID=$!
+  
+  # Monitor progress
+  while kill -0 $PID 2>/dev/null; do
+    sleep 1
+    echo "Transferring files..."
+  done
+  
+  wait $PID
+
+  # Notify completion
+  if [ $? -eq 0 ]; then
+    echo "Transfer completed successfully!"
+  else
+    echo "Transfer failed!"
+  fi
+fi

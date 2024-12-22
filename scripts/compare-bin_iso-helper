@@ -1,0 +1,94 @@
+#!/bin/bash
+# 
+# Copyright (c) [2024] [Ronny Hamann]
+# 
+# License Terms:
+# 
+# 1. Modifications of this script are permitted for personal use.
+# 2. Redistribution or reuse of the modified or unmodified script
+#    is only allowed with prior written permission from the author.
+# 
+# Disclaimer of Warranty:
+# 
+# This script is provided "as is", without warranty of any kind, express or implied,
+# including but not limited to the warranties of merchantability, fitness for a particular purpose,
+# and noninfringement. In no event shall the author be liable for any claim, damages or other liability,
+# whether in an action of contract, tort or otherwise, arising from, out of or in connection with the
+# script or the use or other dealings in the script.
+#
+
+# Check if enough arguments are provided
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 <path_to_BIN_file> <path_to_ISO_file>"
+    exit 1
+fi
+
+# BIN and ISO files from command-line arguments
+BIN_FILE="$1"
+ISO_FILE="$2"
+
+# Create directories for extracted files
+TMP_DIR=$(mktemp -d)
+ISO_EXTRACTED_DIR="$TMP_DIR/extracted_iso"
+BIN_EXTRACTED_DIR="$TMP_DIR/extracted_bin"
+OUTPUT_ISO_DIR="$TMP_DIR/output_iso"
+mkdir -p "$ISO_EXTRACTED_DIR" "$BIN_EXTRACTED_DIR" "$OUTPUT_ISO_DIR"
+
+# Create mount points if not already present
+[ ! -d /mnt/iso ] && mkdir -p /mnt/iso
+[ ! -d /mnt/bin_iso ] && mkdir -p /mnt/bin_iso
+
+# Extract ISO image
+mount -o loop "$ISO_FILE" /mnt/iso
+if [ $? -eq 0 ]; then
+    cp -r /mnt/iso/* "$ISO_EXTRACTED_DIR/"
+    umount /mnt/iso
+else
+    if [ -z "$DISPLAY" ]; then
+        echo "Error mounting ISO image"
+    else
+        zenity --error --text="Error mounting ISO image"
+    fi
+    exit 1
+fi
+
+# Convert and extract BIN image
+bchunk "$BIN_FILE" "${BIN_FILE%.*}.CUE" "$OUTPUT_ISO_DIR/output_iso"
+mount -o loop "$OUTPUT_ISO_DIR/output_iso01.iso" /mnt/bin_iso
+if [ $? -eq 0 ]; then
+    cp -r /mnt/bin_iso/* "$BIN_EXTRACTED_DIR/"
+    umount /mnt/bin_iso
+else
+    if [ -z "$DISPLAY" ]; then
+        echo "Error mounting BIN image"
+    else
+        zenity --error --text="Error mounting BIN image"
+    fi
+    exit 1
+fi
+
+# Compare extracted files and output differences
+diff_output="$TMP_DIR/diff_output.txt"
+diff -r "$BIN_EXTRACTED_DIR/" "$ISO_EXTRACTED_DIR/" > "$diff_output"
+
+# Check if differences were found
+if [ -s "$diff_output" ]; then
+    if [ -z "$DISPLAY" ]; then
+        echo "Differences found. Diff output:"
+        cat "$diff_output"
+    else
+        zenity --text-info --filename="$diff_output" --title="Differences found"
+    fi
+else
+    if [ -z "$DISPLAY" ]; then
+        echo "No differences found. Files are identical."
+    else
+        zenity --info --text="No differences found. Files are identical."
+        rm -f "$diff_output" # Remove the empty file as no differences were found
+    fi
+fi
+
+# Clean up: delete temporary directory and mount points
+rm -rf "$TMP_DIR"
+[ -d /mnt/iso ] && rm -rf /mnt/iso
+[ -d /mnt/bin_iso ] && rm -rf /mnt/bin_iso

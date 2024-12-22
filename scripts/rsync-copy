@@ -1,0 +1,108 @@
+#!/bin/bash
+# 
+# Copyright (c) [2024] [Ronny Hamann]
+# 
+# License Terms:
+# 
+# 1. Modifications of this script are permitted for personal use.
+# 2. Redistribution or reuse of the modified or unmodified script
+#    is only allowed with prior written permission from the author.
+# 
+# Disclaimer of Warranty:
+# 
+# This script is provided "as is", without warranty of any kind, express or implied,
+# including but not limited to the warranties of merchantability, fitness for a particular purpose,
+# and noninfringement. In no event shall the author be liable for any claim, damages or other liability,
+# whether in an action of contract, tort or otherwise, arising from, out of or in connection with the
+# script or the use or other dealings in the script.
+#
+
+# Check if source files/folders are provided
+if [ $# -eq 0 ]; then
+  if [ -n "$DISPLAY" ] || [ -n "$WAYLAND_DISPLAY" ]; then
+    zenity --error --text="No source file or folder specified!"
+  else
+    echo "No source file or folder specified!"
+  fi
+  exit 1
+fi
+
+# Function to clean up the temporary file
+cleanup() {
+  rm -f "$PROGRESS_FILE"
+}
+
+# Ensure cleanup on script exit
+trap cleanup EXIT
+
+# Check if we are in a graphical environment
+if [ -n "$DISPLAY" ] || [ -n "$WAYLAND_DISPLAY" ]; then
+  # Prompt for the destination folder using Zenity
+  DEST=$(zenity --file-selection --directory --title="Select Destination Directory")
+
+  # Check if destination is selected
+  if [ -z "$DEST" ]; then
+    zenity --error --text="No destination directory selected!"
+    exit 1
+  fi
+
+  # Create a temporary file to store progress
+  PROGRESS_FILE=$(mktemp)
+
+  # Start rsync in the background and output progress to the temporary file
+  rsync -ahu --info=progress2 "$@" "$DEST" > "$PROGRESS_FILE" &
+
+  # Use Zenity to display the progress
+  (
+    while kill -0 $! 2>/dev/null; do
+      if [ -s "$PROGRESS_FILE" ]; then
+        PROGRESS=$(tail -n 1 "$PROGRESS_FILE" | grep -oP '(\d+)%' | tail -n 1 | tr -d '%')
+        echo "$PROGRESS"
+        echo "# $PROGRESS% completed"
+      fi
+      sleep 1
+    done
+  ) | zenity --progress --title="File Transfer" --percentage=0 --auto-close --width=500
+
+  # Check rsync result
+  wait $!
+
+  # Notify completion
+  if [ $? -eq 0 ]; then
+    zenity --info --text="Transfer completed successfully!"
+  else
+    zenity --error --text="Transfer failed!"
+  fi
+
+else
+  # Non-graphical environment
+  echo "Please enter the necessary information:"
+
+  read -p "Destination Path: " DEST
+
+  # Ensure destination path is provided
+  if [ -z "$DEST" ]; then
+    echo "No destination directory selected!"
+    exit 1
+  fi
+
+  # Start rsync and show progress in the terminal
+  rsync -ahu --info=progress2 "$@" "$DEST" &
+  
+  PID=$!
+  
+  # Monitor progress
+  while kill -0 $PID 2>/dev/null; do
+    sleep 1
+    echo "Transferring files..."
+  done
+  
+  wait $PID
+
+  # Notify completion
+  if [ $? -eq 0 ]; then
+    echo "Transfer completed successfully!"
+  else
+    echo "Transfer failed!"
+  fi
+fi

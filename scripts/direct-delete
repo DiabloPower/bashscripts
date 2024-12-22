@@ -1,0 +1,90 @@
+#!/bin/bash
+# 
+# Copyright (c) [2024] [Ronny Hamann]
+# 
+# License Terms:
+# 
+# 1. Modifications of this script are permitted for personal use.
+# 2. Redistribution or reuse of the modified or unmodified script
+#    is only allowed with prior written permission from the author.
+# 
+# Disclaimer of Warranty:
+# 
+# This script is provided "as is", without warranty of any kind, express or implied,
+# including but not limited to the warranties of merchantability, fitness for a particular purpose,
+# and noninfringement. In no event shall the author be liable for any claim, damages or other liability,
+# whether in an action of contract, tort or otherwise, arising from, out of or in connection with the
+# script or the use or other dealings in the script.
+#
+
+# Function to clean up and exit
+cleanup_exit() {
+  if [ -n "$1" ]; then
+    rm -f "$1"
+  fi
+  exit $2
+}
+
+# Check if we are in an X11/Wayland environment
+if [ -n "$DISPLAY" ] || [ -n "$WAYLAND_DISPLAY" ]; then
+  # Graphical environment
+  zenity --question --text="Are you sure you want to delete the selected files/folders?"
+
+  if [ $? -eq 0 ]; then
+    PROGRESS_FILE=$(mktemp)
+
+    # Start the delete operation in the background and store progress
+    rm -rf "$@" > "$PROGRESS_FILE" &
+    
+    # Use Zenity to display the progress
+    (
+      while kill -0 $! 2>/dev/null; do
+        echo "Deleting files..."
+        sleep 1
+      done
+    ) | zenity --progress --title="Deleting Files" --text="Processing..." --auto-close --width=500
+
+    # Check delete result
+    wait $!
+
+    # Notify completion
+    if [ $? -eq 0 ]; then
+      zenity --info --text="Deletion completed successfully!"
+    else
+      zenity --error --text="Deletion failed!"
+    fi
+
+    cleanup_exit "$PROGRESS_FILE" $?
+  else
+    zenity --info --text="Deletion cancelled."
+    cleanup_exit "" 0
+  fi
+
+else
+  # Non-graphical environment
+  echo "Are you sure you want to delete the selected files/folders? (y/n)"
+  read -r CONFIRMATION
+
+  if [ "$CONFIRMATION" == "y" ]; then
+    rm -rf "$@" &
+    
+    PID=$!
+    
+    # Monitor progress
+    while kill -0 $PID 2>/dev/null; do
+      echo "Deleting files..."
+      sleep 1
+    done
+    
+    wait $PID
+
+    # Notify completion
+    if [ $? -eq 0 ]; then
+      echo "Deletion completed successfully!"
+    else
+      echo "Deletion failed!"
+    fi
+  else
+    echo "Deletion cancelled."
+  fi
+fi

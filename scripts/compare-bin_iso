@@ -1,0 +1,99 @@
+#!/bin/bash
+# 
+# Copyright (c) [2024] [Ronny Hamann]
+# 
+# License Terms:
+# 
+# 1. Modifications of this script are permitted for personal use.
+# 2. Redistribution or reuse of the modified or unmodified script
+#    is only allowed with prior written permission from the author.
+# 
+# Disclaimer of Warranty:
+# 
+# This script is provided "as is", without warranty of any kind, express or implied,
+# including but not limited to the warranties of merchantability, fitness for a particular purpose,
+# and noninfringement. In no event shall the author be liable for any claim, damages or other liability,
+# whether in an action of contract, tort or otherwise, arising from, out of or in connection with the
+# script or the use or other dealings in the script.
+#
+#!/bin/bash
+
+# Variables for BIN and ISO files
+BIN_FILE=""
+ISO_FILE=""
+
+# Absolute path to the helpers directory
+HELPERS_DIR="/usr/local/bin/helpers"
+
+# Parse command-line options
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        *.bin|*.BIN) BIN_FILE="$1" ;;
+        *.iso|*.ISO) ISO_FILE="$1" ;;
+        *) echo "Unknown file: $1" ;;
+    esac
+    shift
+done
+
+# Check if a graphical environment is available
+if [ -z "$DISPLAY" ]; then
+    # No graphical environment available, ask for files through command line if not provided as parameters
+    if [ -z "$BIN_FILE" ]; then
+        read -p "Path to BIN file: " BIN_FILE
+    fi
+    if [ -z "$ISO_FILE" ]; then
+        read -p "Path to ISO file: " ISO_FILE
+    fi
+else
+    # Ask for files through Zenity if not provided as parameters
+    if [ -z "$BIN_FILE" ]; then
+        BIN_FILE=$(zenity --file-selection --file-filter="BIN files ( *.bin *.BIN ) | *.bin *.BIN" --title="Select the BIN file")
+    fi
+    if [ -z "$ISO_FILE" ]; then
+        ISO_FILE=$(zenity --file-selection --file-filter="ISO files ( *.iso *.ISO ) | *.iso *.ISO" --title="Select the ISO file")
+    fi
+fi
+
+# Check if files were selected/entered
+if [ -z "$BIN_FILE" ] || [ -z "$ISO_FILE" ]; then
+    if [ -z "$DISPLAY" ]; then
+        echo "Error: Both files must be specified."
+    else
+        zenity --error --text="Error: Both files must be selected."
+    fi
+    exit 1
+fi
+
+# Ask for sudo password
+if [ -z "$DISPLAY" ];then
+    # No graphical environment available, ask for password through command line
+    read -sp "Please enter your root password: " PASSWORD
+    echo
+else
+    PASSWORD=$(zenity --password --title="Password Prompt" --text="Please enter your root password:")
+fi
+
+# Create temporary script file to pass the password
+TEMP_SCRIPT=$(mktemp)
+chmod +x $TEMP_SCRIPT
+
+cat <<EOF > $TEMP_SCRIPT
+#!/bin/bash
+echo $PASSWORD | sudo -S bash -c "$HELPERS_DIR/compare-bin_iso-helper \"$BIN_FILE\" \"$ISO_FILE\""
+EOF
+
+# Run temporary script
+$TEMP_SCRIPT
+EXIT_STATUS=$?
+
+# Delete temporary script file
+rm -f $TEMP_SCRIPT
+
+# Check if the compare script ran successfully
+if [ $EXIT_STATUS -ne 0 ]; then
+    if [ -z "$DISPLAY" ]; then
+        echo "Error running the compare script."
+    else
+        zenity --error --text="Error running the compare script."
+    fi
+fi
